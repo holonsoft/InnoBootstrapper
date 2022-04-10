@@ -29,8 +29,10 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestStopByCall()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntime>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolonRuntime<TestHolonRuntime>();
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();
   }
@@ -46,8 +48,11 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestUngracefulStopByCall()
   {
-    var bootstrapper = HolonBootstrapper.Create(TimeSpan.FromSeconds(2));
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeUngraceful>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create(TimeSpan.FromSeconds(2))
+      .AddHolonRuntime<TestHolonRuntimeUngraceful>();
+
     await bootstrapper.RunAsync();
     Exception? exception = null;
     try
@@ -97,8 +102,11 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestLocalDependenciesFail()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependency>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolonRuntime<TestHolonRuntimeWithDependency>();
+
     Exception? exception = null;
     try
     {
@@ -116,8 +124,11 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestLocalDependenciesWork()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonAsync<TestHolonSetupLocalDependency, TestHolonRuntimeWithDependency>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolon<TestHolonSetupLocalDependency, TestHolonRuntimeWithDependency>();
+
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();
   }
@@ -125,9 +136,12 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestLocalDependenciesInvisibleToOthers()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonAsync<TestHolonSetupLocalDependency, TestHolonRuntimeWithDependency>();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependency>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolon<TestHolonSetupLocalDependency, TestHolonRuntimeWithDependency>()
+      .AddHolonRuntime<TestHolonRuntimeWithDependency>();
+
     Exception? exception = null;
     try
     {
@@ -145,8 +159,11 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestSharedDependenciesFail()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependency>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolonRuntime<TestHolonRuntimeWithDependency>();
+
     Exception? exception = null;
     try
     {
@@ -174,9 +191,10 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestSharedDependenciesWork()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonAsync<TestHolonSetupSharedDependency, TestHolonRuntimeWithDependency>();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependency>();
+    var bootstrapper = HolonBootstrapper.Create()
+      .AddHolon<TestHolonSetupSharedDependency, TestHolonRuntimeWithDependency>()
+      .AddHolonRuntime<TestHolonRuntimeWithDependency>();
+
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();
   }
@@ -195,9 +213,12 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestSharedDependenciesWorkAcrossStages()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonSetupAsync<TestHolonSetupSharedDependencyOnFirstStage>();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependency>();
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolonSetup<TestHolonSetupSharedDependencyOnFirstStage>()
+      .AddHolonRuntime<TestHolonRuntimeWithDependency>();
+
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();
   }
@@ -220,9 +241,10 @@ public class TestBasicFunctionality
   [Fact]
   public async Task TestSharedDependenciesRespectStages()
   {
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonSetupAsync<TestHolonSetupSharedDependency>();
-    await bootstrapper.AddHolonRuntimeAsync<TestHolonRuntimeWithDependencyOnFirstStage>();
+    var bootstrapper = HolonBootstrapper.Create()
+      .AddHolonSetup<TestHolonSetupSharedDependency>()
+      .AddHolonRuntime<TestHolonRuntimeWithDependencyOnFirstStage>();
+
     Exception? exception = null;
     try
     {
@@ -247,12 +269,16 @@ public class TestBasicFunctionality
   public async Task TestScanning()
   {
     var scanned = new List<(Type SetupType, Type RuntimeType)>();
-    var bootstrapper = HolonBootstrapper.Create();
-    await bootstrapper.AddHolonsByScan(x =>
+
+    var bootstrapper
+      = HolonBootstrapper
+      .Create()
+      .AddHolonsByScan(x =>
     {
       scanned.Add(x);
       return x.SetupType == typeof(TestHolonSetupForScanning);
     });
+
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();
 

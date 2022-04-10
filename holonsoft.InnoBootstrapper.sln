@@ -7,7 +7,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "holonsoft.InnoBootstrapper"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "holonsoft.InnoBootstrapper.Abstractions", "holonsoft.InnoBootstrapper.Abstractions\holonsoft.InnoBootstrapper.Abstractions.csproj", "{D5633AD9-5268-4594-9C7D-8169B56DFD2D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "holonsoft.InnoBootstrapper.Tests", "holonsoft.InnoBootstrapper.Tests\holonsoft.InnoBootstrapper.Tests.csproj", "{868BD68C-4C30-4562-8C16-3749C8C5C969}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "holonsoft.InnoBootstrapper.Tests", "holonsoft.InnoBootstrapper.Tests\holonsoft.InnoBootstrapper.Tests.csproj", "{868BD68C-4C30-4562-8C16-3749C8C5C969}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "holonsoft.InnoBootstrapper.HostingExtensions", "holonsoft.InnoBootstrapper.HostingExtensions\holonsoft.InnoBootstrapper.HostingExtensions.csproj", "{68DDFC20-5BD1-434C-A614-F64CD8E83A8A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +29,10 @@ Global
 		{868BD68C-4C30-4562-8C16-3749C8C5C969}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{868BD68C-4C30-4562-8C16-3749C8C5C969}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{868BD68C-4C30-4562-8C16-3749C8C5C969}.Release|Any CPU.Build.0 = Release|Any CPU
+		{68DDFC20-5BD1-434C-A614-F64CD8E83A8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{68DDFC20-5BD1-434C-A614-F64CD8E83A8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{68DDFC20-5BD1-434C-A614-F64CD8E83A8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{68DDFC20-5BD1-434C-A614-F64CD8E83A8A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

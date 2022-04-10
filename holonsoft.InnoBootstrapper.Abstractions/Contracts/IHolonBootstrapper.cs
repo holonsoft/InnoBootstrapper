@@ -4,39 +4,39 @@ using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup;
 namespace holonsoft.InnoBootstrapper.Abstractions.Contracts;
 public interface IHolonBootstrapper
 {
-  public Task AddHolonSetupAsync<THolonSetup>(Func<THolonSetup, Task> externalConfiguration) where THolonSetup : IHolonSetup;
-  public Task AddHolonSetupAsync<THolonSetup>() where THolonSetup : IHolonSetup
-    => AddHolonSetupAsync<THolonSetup>(x => Task.CompletedTask);
-  public Task AddHolonSetupAsync<THolonSetup>(Action<THolonSetup> externalConfiguration) where THolonSetup : IHolonSetup
-    => AddHolonSetupAsync<THolonSetup>(x =>
+  public IHolonBootstrapper AddHolonSetup<THolonSetup>(Func<THolonSetup, Task> externalConfiguration) where THolonSetup : IHolonSetup;
+  public IHolonBootstrapper AddHolonSetup<THolonSetup>() where THolonSetup : IHolonSetup
+    => AddHolonSetup<THolonSetup>(x => Task.CompletedTask);
+  public IHolonBootstrapper AddHolonSetup<THolonSetup>(Action<THolonSetup> externalConfiguration) where THolonSetup : IHolonSetup
+    => AddHolonSetup<THolonSetup>(x =>
     {
       externalConfiguration(x);
       return Task.CompletedTask;
     });
 
-  public Task AddHolonRuntimeAsync<THolonRuntime>() where THolonRuntime : IHolonRuntime;
+  public IHolonBootstrapper AddHolonRuntime<THolonRuntime>() where THolonRuntime : IHolonRuntime;
 
-  public Task AddHolonAsync<THolonSetup, THolonRuntime>(Func<THolonSetup, Task> externalConfiguration)
+  public IHolonBootstrapper AddHolon<THolonSetup, THolonRuntime>(Func<THolonSetup, Task> externalConfiguration)
     where THolonSetup : IHolonSetup
     where THolonRuntime : IHolonRuntime;
 
-  public Task AddHolonAsync<THolonSetup, THolonRuntime>()
+  public IHolonBootstrapper AddHolon<THolonSetup, THolonRuntime>()
     where THolonSetup : IHolonSetup
     where THolonRuntime : IHolonRuntime
-    => AddHolonAsync<THolonSetup, THolonRuntime>(x => Task.CompletedTask);
+    => AddHolon<THolonSetup, THolonRuntime>(x => Task.CompletedTask);
 
-  public Task AddHolonAsync<THolonSetup, THolonRuntime>(Action<THolonSetup> externalConfiguration)
+  public IHolonBootstrapper AddHolon<THolonSetup, THolonRuntime>(Action<THolonSetup> externalConfiguration)
     where THolonSetup : IHolonSetup
     where THolonRuntime : IHolonRuntime
-    => AddHolonAsync<THolonSetup, THolonRuntime>(x =>
+    => AddHolon<THolonSetup, THolonRuntime>(x =>
     {
       externalConfiguration(x);
       return Task.CompletedTask;
     });
 
-  public Task AddHolonsByScan(Func<(Type SetupType, Type RuntimeType), bool> predicate);
+  public IHolonBootstrapper AddHolonsByScan(Func<(Type SetupType, Type RuntimeType), bool> predicate);
 
-  public Task AddHolonsByScan()
+  public IHolonBootstrapper AddHolonsByScan()
     => AddHolonsByScan(x => true);
 
   public Task RunAsync(CancellationToken stoppingToken = default);

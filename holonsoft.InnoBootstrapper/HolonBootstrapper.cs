@@ -36,7 +36,7 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
   protected HolonBootstrapperBase(TimeSpan? gracefulTeardownTimeSpan = default)
     => _gracefulTeardownTimeSpan = gracefulTeardownTimeSpan ?? TimeSpan.FromSeconds(_defaultGracefulTeardownTimeSpanSeconds);
 
-  private Task AddHolonInternalAsync(Type setupType, Type runtimeType, Func<IHolonSetup, Task> externalConfiguration)
+  private IHolonBootstrapper AddHolonInternal(Type setupType, Type runtimeType, Func<IHolonSetup, Task> externalConfiguration)
   {
     setupType.Requires(nameof(setupType)).IsNotNull().IsOfType<IHolonSetup>().IsNotAbstract();
     runtimeType.Requires(nameof(runtimeType)).IsNotNull().IsOfType<IHolonRuntime>().IsNotAbstract();
@@ -49,19 +49,19 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
 
     _registrations[setupStage].Add(new HolonRegistration(setupStage, setupType, runtimeType));
 
-    return Task.CompletedTask;
+    return this;
   }
 
-  Task IHolonBootstrapper.AddHolonAsync<THolonSetup, THolonRuntime>(Func<THolonSetup, Task> externalConfiguration)
-    => AddHolonInternalAsync(typeof(THolonSetup), typeof(THolonRuntime), x => externalConfiguration((THolonSetup) x));
+  IHolonBootstrapper IHolonBootstrapper.AddHolon<THolonSetup, THolonRuntime>(Func<THolonSetup, Task> externalConfiguration)
+    => AddHolonInternal(typeof(THolonSetup), typeof(THolonRuntime), x => externalConfiguration((THolonSetup) x));
 
-  Task IHolonBootstrapper.AddHolonRuntimeAsync<THolonRuntime>()
-    => AddHolonInternalAsync(typeof(EmptyHolonSetup), typeof(THolonRuntime), x => Task.CompletedTask);
+  IHolonBootstrapper IHolonBootstrapper.AddHolonRuntime<THolonRuntime>()
+    => AddHolonInternal(typeof(EmptyHolonSetup), typeof(THolonRuntime), x => Task.CompletedTask);
 
-  Task IHolonBootstrapper.AddHolonSetupAsync<THolonSetup>(Func<THolonSetup, Task> externalConfiguration)
-    => AddHolonInternalAsync(typeof(THolonSetup), typeof(EmptyHolonRuntime), x => externalConfiguration((THolonSetup) x));
+  IHolonBootstrapper IHolonBootstrapper.AddHolonSetup<THolonSetup>(Func<THolonSetup, Task> externalConfiguration)
+    => AddHolonInternal(typeof(THolonSetup), typeof(EmptyHolonRuntime), x => externalConfiguration((THolonSetup) x));
 
-  async Task IHolonBootstrapper.AddHolonsByScan(Func<(Type SetupType, Type RuntimeType), bool> predicate)
+  IHolonBootstrapper IHolonBootstrapper.AddHolonsByScan(Func<(Type SetupType, Type RuntimeType), bool> predicate)
   {
     var setupTypes = ReflectionUtils.AllTypes.Values.Where(x => x.IsAssignableTo<IHolonSetup>()).ToHashSet();
     var runtimeTypes = ReflectionUtils.AllTypes.Values.Where(x => x.IsAssignableTo<IHolonRuntime>()).ToHashSet();
@@ -74,28 +74,30 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
     setupTypes.ExceptWith(assignedTypes.Select(x => x.SetupType));
     runtimeTypes.ExceptWith(assignedTypes.Select(x => x.RuntimeType));
 
-    async Task MayAdd(Type setupType, Type runtimeType)
+    void MayAdd(Type setupType, Type runtimeType)
     {
       if (predicate((setupType, runtimeType)))
       {
-        await AddHolonInternalAsync(setupType, runtimeType, x => Task.CompletedTask);
+        AddHolonInternal(setupType, runtimeType, x => Task.CompletedTask);
       }
     }
 
     foreach ((var setupType, var runtimeType) in assignedTypes)
     {
-      await MayAdd(setupType, runtimeType);
+      MayAdd(setupType, runtimeType);
     }
 
     foreach (var runtimeType in runtimeTypes)
     {
-      await MayAdd(typeof(EmptyHolonSetup), runtimeType);
+      MayAdd(typeof(EmptyHolonSetup), runtimeType);
     }
 
     foreach (var setupType in setupTypes)
     {
-      await MayAdd(setupType, typeof(EmptyHolonRuntime));
+      MayAdd(setupType, typeof(EmptyHolonRuntime));
     }
+
+    return this;
   }
 
   protected virtual Task ConfigureRootLifetimeScopeAsync(ContainerBuilder containerBuilder)
