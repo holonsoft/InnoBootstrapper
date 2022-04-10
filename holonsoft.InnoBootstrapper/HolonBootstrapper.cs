@@ -24,6 +24,8 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
   };
 
   private CancellationTokenSource? _cancellationTokenSource;
+  private ILifetimeScope? _rootLifetimeScope;
+
   private CancellationTokenSource GetCancellationTokenSource()
     => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
                                                                        " Did you run the bootstrapper before trying to stop it?");
@@ -111,7 +113,9 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
       var containerBuilder = new ContainerBuilder();
       await ConfigureRootLifetimeScopeAsync(containerBuilder).ConfigureAwait(false);
 
-      ILifetimeScope sharedLifetimeScope = containerBuilder.Build();
+      _rootLifetimeScope = containerBuilder.Build();
+
+      var sharedLifetimeScope = _rootLifetimeScope;
       foreach (var holonSetupRegistrationsPerStage in _registrations.OrderBy(x => x.Key).Select(x => x.Value))
       {
         var setupStageInstance = new HolonSetupStageInstance(holonSetupRegistrationsPerStage, sharedLifetimeScope);
@@ -128,35 +132,45 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
 
   private async Task WaitForShutdownInternalAsync()
   {
-    var cancellationTokenSource = GetCancellationTokenSource();
-
-    Task[] GetAllTasks()
-      => _registrations
-          .SelectMany(x => x.Value)
-          .Select(x => x.RuntimeTask ?? Task.CompletedTask)
-          .Where(x => !x.IsCompleted)
-          .ToArray();
-
-    Task[] allTasks;
-    while (!cancellationTokenSource.IsCancellationRequested && (allTasks = GetAllTasks()).Length > 0)
+    try
     {
-      try
+      var cancellationTokenSource = GetCancellationTokenSource();
+
+      Task[] GetAllTasks()
+        => _registrations
+            .SelectMany(x => x.Value)
+            .Select(x => x.RuntimeTask ?? Task.CompletedTask)
+            .Where(x => !x.IsCompleted)
+            .ToArray();
+
+      Task[] allTasks;
+      while (!cancellationTokenSource.IsCancellationRequested && (allTasks = GetAllTasks()).Length > 0)
       {
-        await Task.WhenAll(allTasks).WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+          await Task.WhenAll(allTasks).WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException)
+        {
+        }
       }
-      catch (TaskCanceledException)
+
+      while ((allTasks = GetAllTasks()).Length > 0)
       {
+        try
+        {
+          await Task.WhenAll(allTasks).WaitAsync(_gracefulTeardownTimeSpan).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException)
+        {
+        }
       }
     }
-
-    while ((allTasks = GetAllTasks()).Length > 0)
+    finally
     {
-      try
+      if (_rootLifetimeScope != null)
       {
-        await Task.WhenAll(allTasks).WaitAsync(_gracefulTeardownTimeSpan).ConfigureAwait(false);
-      }
-      catch (TaskCanceledException)
-      {
+        await _rootLifetimeScope.DisposeAsync();
       }
     }
   }
