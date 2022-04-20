@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Autofac" Version="6.3.0" />
+    <PackageReference Include="holonsoft.Utils" Version="1.6.3" />
   </ItemGroup>
 
 </Project>

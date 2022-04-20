@@ -103,6 +103,12 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
   protected virtual Task ConfigureRootLifetimeScopeAsync(ContainerBuilder containerBuilder)
   {
     containerBuilder.RegisterSource<AnyConcreteTypeNotAlreadyRegisteredSource>();
+
+    containerBuilder
+      .RegisterInstance(this)
+      .As<IHolonBootstrapper>()
+      .SingleInstance();
+
     return Task.CompletedTask;
   }
 

@@ -4,6 +4,6 @@ namespace holonsoft.InnoBootstrapper.Abstractions.Attributes;
 public class HolonSetupStageAttribute : Attribute
 {
   public HolonSetupStage SetupStage { get; init; }
-  public HolonSetupStageAttribute(HolonSetupStage setupStage)
-    => SetupStage = setupStage;
+  public HolonSetupStageAttribute(string setupStageName)
+    => SetupStage = HolonSetupStage.Parse(setupStageName);
 }

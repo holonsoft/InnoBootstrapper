@@ -199,7 +199,7 @@ public class TestBasicFunctionality
     await bootstrapper.StopAsync();
   }
 
-  [HolonSetupStage(HolonSetupStage.InitBootstrapper)]
+  [HolonSetupStage(nameof(HolonSetupStage.InitBootstrapper))]
   private class TestHolonSetupSharedDependencyOnFirstStage : IHolonSetup, IHolonSetupSharedLifetimeScope
   {
     public Task InitializeAsync()
@@ -223,7 +223,7 @@ public class TestBasicFunctionality
     await bootstrapper.StopAsync();
   }
 
-  [HolonSetupStage(HolonSetupStage.InitBootstrapper)]
+  [HolonSetupStage(nameof(HolonSetupStage.InitBootstrapper))]
   private class TestHolonRuntimeWithDependencyOnFirstStage : IHolonRuntime
   {
     private readonly IFakeDependency _fakeDependency;

@@ -1,9 +1,15 @@
-﻿namespace holonsoft.InnoBootstrapper.Abstractions.Enums;
-public enum HolonSetupStage
+﻿using holonsoft.Utils;
+
+namespace holonsoft.InnoBootstrapper.Abstractions.Enums;
+public record HolonSetupStage : ExtensibleEnum<HolonSetupStage>
 {
-  InitBootstrapper = 0, //empty from scratch - mostly internals
-  BasicServices = 1, //like logging and configuration
-  CommonServices = 2, //like database access or connections
-  BusinessServices = 3, //core logics of application
-  ApplicationRun = 4, // last one - application starts to run fully
+  public static readonly HolonSetupStage InitBootstrapper = new(0, nameof(InitBootstrapper)); //empty from scratch - mostly internals
+  public static readonly HolonSetupStage BasicServices = new(1000, nameof(BasicServices)); //like logging and configuration
+  public static readonly HolonSetupStage CommonServices = new(2000, nameof(CommonServices)); //like database access or connections
+  public static readonly HolonSetupStage BusinessServices = new(3000, nameof(BusinessServices)); //core logics of application
+  public static readonly HolonSetupStage ApplicationRun = new(int.MaxValue, nameof(ApplicationRun)); // last one - application starts to run fully
+
+  public HolonSetupStage(int value, string name) : base(value, name)
+  {
+  }
 }
