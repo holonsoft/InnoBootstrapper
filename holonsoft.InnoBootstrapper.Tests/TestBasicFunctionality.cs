@@ -6,6 +6,7 @@ using holonsoft.InnoBootstrapper.Abstractions.Contracts.Runtime;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup.Functions;
 using holonsoft.InnoBootstrapper.Abstractions.Enums;
+using holonsoft.InnoBootstrapper.Abstractions.Models.Setup;
 using Xunit;
 
 namespace holonsoft.InnoBootstrapper.Tests;
@@ -273,11 +274,13 @@ public class TestBasicFunctionality
     var bootstrapper
       = HolonBootstrapper
       .Create()
-      .AddHolonsByScan(x =>
-    {
-      scanned.Add(x);
-      return x.SetupType == typeof(TestHolonSetupForScanning);
-    });
+      .AddHolonSetup<ScanningHolonSetup>(HolonSetupStage.InitBootstrapper,
+        x => x.FilterByPredicate(
+          y =>
+            {
+              scanned.Add(y);
+              return y.SetupType == typeof(TestHolonSetupForScanning);
+            }));
 
     await bootstrapper.RunAsync();
     await bootstrapper.StopAsync();

@@ -1,7 +1,7 @@
 ﻿using holonsoft.InnoBootstrapper.Abstractions.Contracts.Runtime;
 
-namespace holonsoft.InnoBootstrapper.Runtime;
-internal class EmptyHolonRuntime : IHolonRuntime
+namespace holonsoft.InnoBootstrapper.Abstractions.Models.Runtime;
+public class EmptyHolonRuntime : IHolonRuntime
 {
   public Task InitializeAsync()
     => Task.CompletedTask;

@@ -9,7 +9,7 @@ internal class HolonSetupStageInstance
   private readonly IEnumerable<HolonRegistration> _holonRegistrations;
   private readonly ILifetimeScope _sharedLifeTimeScope;
 
-  public HolonSetupStageInstance(IEnumerable<HolonRegistration> holonRegistrations, ILifetimeScope sharedLifeTimeScope)
+  internal HolonSetupStageInstance(IEnumerable<HolonRegistration> holonRegistrations, ILifetimeScope sharedLifeTimeScope)
   {
     _holonRegistrations = holonRegistrations;
     _sharedLifeTimeScope = sharedLifeTimeScope;
@@ -22,6 +22,8 @@ internal class HolonSetupStageInstance
     foreach (var holonRegistration in _holonRegistrations)
     {
       holonRegistration.Setup = (IHolonSetup) _sharedLifeTimeScope.Resolve(holonRegistration.SetupType);
+
+      await holonRegistration.ExternalConfiguration(holonRegistration.Setup);
 
       await holonRegistration.Setup.InitializeAsync().ConfigureAwait(false);
 
@@ -78,7 +80,7 @@ internal class HolonSetupStageInstance
     }
   }
 
-  public async Task<ILifetimeScope> SetupAndRunAsync(CancellationToken stoppingToken)
+  internal async Task<ILifetimeScope> SetupAndRunAsync(CancellationToken stoppingToken)
   {
     var newSharedLifetimeScope = await SetupAsync().ConfigureAwait(false);
 

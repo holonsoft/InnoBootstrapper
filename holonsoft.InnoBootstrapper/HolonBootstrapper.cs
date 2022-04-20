@@ -6,96 +6,52 @@ using holonsoft.InnoBootstrapper.Abstractions.Contracts;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Runtime;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup;
 using holonsoft.InnoBootstrapper.Abstractions.Enums;
-using holonsoft.InnoBootstrapper.Runtime;
-using holonsoft.InnoBootstrapper.Setup;
-using holonsoft.Utils;
+using holonsoft.InnoBootstrapper.Abstractions.Models.Runtime;
+using holonsoft.InnoBootstrapper.Abstractions.Models.Setup;
 using System.Reflection;
 
 namespace holonsoft.InnoBootstrapper;
-public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TSelf : HolonBootstrapperBase<TSelf>
+public class HolonBootstrapperBase : IHolonBootstrapper
 {
-  private readonly Dictionary<HolonSetupStage, List<HolonRegistration>> _registrations = new()
-  {
-    { HolonSetupStage.InitBootstrapper, new List<HolonRegistration>() },
-    { HolonSetupStage.BasicServices, new List<HolonRegistration>() },
-    { HolonSetupStage.CommonServices, new List<HolonRegistration>() },
-    { HolonSetupStage.BusinessServices, new List<HolonRegistration>() },
-    { HolonSetupStage.ApplicationRun, new List<HolonRegistration>() },
-  };
-
-  private CancellationTokenSource? _cancellationTokenSource;
-  private ILifetimeScope? _rootLifetimeScope;
-
-  private CancellationTokenSource GetCancellationTokenSource()
-    => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
-                                                                       " Did you run the bootstrapper before trying to stop it?");
-
+  private readonly Dictionary<HolonSetupStage, List<HolonRegistration>> _registrations;
   private readonly TimeSpan _gracefulTeardownTimeSpan;
   private const int _defaultGracefulTeardownTimeSpanSeconds = 30;
 
-  protected HolonBootstrapperBase(TimeSpan? gracefulTeardownTimeSpan = default)
-    => _gracefulTeardownTimeSpan = gracefulTeardownTimeSpan ?? TimeSpan.FromSeconds(_defaultGracefulTeardownTimeSpanSeconds);
+  private CancellationTokenSource? _cancellationTokenSource;
+  private ILifetimeScope? _rootLifetimeScope;
+  private HolonSetupStage? _currentStage;
 
-  private IHolonBootstrapper AddHolonInternal(Type setupType, Type runtimeType, Func<IHolonSetup, Task> externalConfiguration)
+  protected HolonBootstrapperBase(TimeSpan? gracefulTeardownTimeSpan = default)
   {
-    setupType.Requires(nameof(setupType)).IsNotNull().IsOfType<IHolonSetup>().IsNotAbstract();
-    runtimeType.Requires(nameof(runtimeType)).IsNotNull().IsOfType<IHolonRuntime>().IsNotAbstract();
+    _registrations = HolonSetupStage.GetValues().ToDictionary(x => x, x => new List<HolonRegistration>());
+    _gracefulTeardownTimeSpan = gracefulTeardownTimeSpan ?? TimeSpan.FromSeconds(_defaultGracefulTeardownTimeSpanSeconds);
+  }
+
+  IHolonBootstrapper IHolonBootstrapper.AddHolon(HolonSetupStage? setupStage, Type? setupType, Type? runtimeType, Func<IHolonSetup, Task>? externalConfiguration)
+  {
+    setupType = setupType ?? typeof(EmptyHolonSetup);
+    runtimeType = runtimeType ?? typeof(EmptyHolonRuntime);
+
+    setupType.Requires(nameof(setupType)).IsOfType<IHolonSetup>().IsNotAbstract();
+    runtimeType.Requires(nameof(runtimeType)).IsOfType<IHolonRuntime>().IsNotAbstract();
+
     externalConfiguration = externalConfiguration ?? (x => Task.CompletedTask);
 
     static HolonSetupStage? DetermineSetupStage(Type type)
       => type.GetCustomAttributes<HolonSetupStageAttribute>(true).FirstOrDefault()?.SetupStage;
 
-    var setupStage = DetermineSetupStage(setupType) ?? DetermineSetupStage(runtimeType) ?? HolonSetupStage.ApplicationRun;
+    setupStage
+      = setupStage
+        ?? DetermineSetupStage(setupType)
+        ?? DetermineSetupStage(runtimeType)
+        ?? HolonSetupStage.ApplicationRun;
 
-    _registrations[setupStage].Add(new HolonRegistration(setupStage, setupType, runtimeType));
+    setupStage
+      .Value
+      .Requires(nameof(setupStage))
+      .IsGreaterThan(_currentStage?.Value ?? int.MinValue, "New holons can only be added to coming stages!");
 
-    return this;
-  }
-
-  IHolonBootstrapper IHolonBootstrapper.AddHolon<THolonSetup, THolonRuntime>(Func<THolonSetup, Task> externalConfiguration)
-    => AddHolonInternal(typeof(THolonSetup), typeof(THolonRuntime), x => externalConfiguration((THolonSetup) x));
-
-  IHolonBootstrapper IHolonBootstrapper.AddHolonRuntime<THolonRuntime>()
-    => AddHolonInternal(typeof(EmptyHolonSetup), typeof(THolonRuntime), x => Task.CompletedTask);
-
-  IHolonBootstrapper IHolonBootstrapper.AddHolonSetup<THolonSetup>(Func<THolonSetup, Task> externalConfiguration)
-    => AddHolonInternal(typeof(THolonSetup), typeof(EmptyHolonRuntime), x => externalConfiguration((THolonSetup) x));
-
-  IHolonBootstrapper IHolonBootstrapper.AddHolonsByScan(Func<(Type SetupType, Type RuntimeType), bool> predicate)
-  {
-    var setupTypes = ReflectionUtils.AllTypes.Values.Where(x => x.IsAssignableTo<IHolonSetup>()).ToHashSet();
-    var runtimeTypes = ReflectionUtils.AllTypes.Values.Where(x => x.IsAssignableTo<IHolonRuntime>()).ToHashSet();
-
-    var assignedTypes =
-      setupTypes.SelectMany(x => x.GetInterfaces().Where(y => y.IsGenericType && y.GetGenericTypeDefinition() == typeof(IHolonSetup<>)).Select(y => (SetupType: x, Interface: y)))
-                .Select(x => (SetupType: x.SetupType, RuntimeType: x.Interface.GetGenericArguments().Single()))
-                .ToArray();
-
-    setupTypes.ExceptWith(assignedTypes.Select(x => x.SetupType));
-    runtimeTypes.ExceptWith(assignedTypes.Select(x => x.RuntimeType));
-
-    void MayAdd(Type setupType, Type runtimeType)
-    {
-      if (predicate((setupType, runtimeType)))
-      {
-        AddHolonInternal(setupType, runtimeType, x => Task.CompletedTask);
-      }
-    }
-
-    foreach ((var setupType, var runtimeType) in assignedTypes)
-    {
-      MayAdd(setupType, runtimeType);
-    }
-
-    foreach (var runtimeType in runtimeTypes)
-    {
-      MayAdd(typeof(EmptyHolonSetup), runtimeType);
-    }
-
-    foreach (var setupType in setupTypes)
-    {
-      MayAdd(setupType, typeof(EmptyHolonRuntime));
-    }
+    _registrations[setupStage].Add(new HolonRegistration(setupStage, setupType, runtimeType, externalConfiguration));
 
     return this;
   }
@@ -124,8 +80,11 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
       _rootLifetimeScope = containerBuilder.Build();
 
       var sharedLifetimeScope = _rootLifetimeScope;
-      foreach (var holonSetupRegistrationsPerStage in _registrations.OrderBy(x => x.Key).Select(x => x.Value))
+      var stages = _registrations.Keys.OrderBy(x => x).ToArray();
+      foreach (var stage in stages)
       {
+        _currentStage = stage;
+        var holonSetupRegistrationsPerStage = _registrations[_currentStage];
         var setupStageInstance = new HolonSetupStageInstance(holonSetupRegistrationsPerStage, sharedLifetimeScope);
         sharedLifetimeScope = await setupStageInstance.SetupAndRunAsync(_cancellationTokenSource.Token).ConfigureAwait(false);
       }
@@ -137,6 +96,10 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
 
   async Task IHolonBootstrapper.RunAsync(CancellationToken stoppingToken)
     => await RunAsyncInternal(stoppingToken).ConfigureAwait(false);
+
+  private CancellationTokenSource GetCancellationTokenSource()
+  => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
+                                                                     " Did you run the bootstrapper before trying to stop it?");
 
   private async Task WaitForShutdownInternalAsync()
   {
@@ -196,13 +159,13 @@ public abstract class HolonBootstrapperBase<TSelf> : IHolonBootstrapper where TS
   }
 }
 
-public sealed class HolonBootstrapper : HolonBootstrapperBase<HolonBootstrapper>
+public sealed class HolonBootstrapper : HolonBootstrapperBase
 {
   private HolonBootstrapper(TimeSpan? gracefulTeardownTimeSpan = default) : base(gracefulTeardownTimeSpan)
   {
 
   }
-
   public static IHolonBootstrapper Create(TimeSpan? gracefulTeardownTimeSpan = default)
     => new HolonBootstrapper(gracefulTeardownTimeSpan);
+
 }
