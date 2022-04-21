@@ -91,15 +91,15 @@ public class HolonBootstrapperBase : IHolonBootstrapper
     }
 
     //stop synchronization and Execution flow - e.g. WPF dispatcher or sth.....
-    await Task.Run(RunWithoutSynchronizationAndExecutionFlow);
+    await Task.Run(RunWithoutSynchronizationAndExecutionFlow).ConfigureAwait(false);
   }
 
   async Task IHolonBootstrapper.RunAsync(CancellationToken stoppingToken)
     => await RunAsyncInternal(stoppingToken).ConfigureAwait(false);
 
   private CancellationTokenSource GetCancellationTokenSource()
-  => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
-                                                                     " Did you run the bootstrapper before trying to stop it?");
+    => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
+                                                                       " Did you run the bootstrapper before trying to stop it?");
 
   private async Task WaitForShutdownInternalAsync()
   {
@@ -141,7 +141,7 @@ public class HolonBootstrapperBase : IHolonBootstrapper
     {
       if (_rootLifetimeScope != null)
       {
-        await _rootLifetimeScope.DisposeAsync();
+        await _rootLifetimeScope.DisposeAsync().ConfigureAwait(false);
       }
     }
   }

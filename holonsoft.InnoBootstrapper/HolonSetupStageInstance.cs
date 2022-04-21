@@ -23,7 +23,7 @@ internal class HolonSetupStageInstance
     {
       holonRegistration.Setup = (IHolonSetup) _sharedLifeTimeScope.Resolve(holonRegistration.SetupType);
 
-      await holonRegistration.ExternalConfiguration(holonRegistration.Setup);
+      await holonRegistration.ExternalConfiguration(holonRegistration.Setup).ConfigureAwait(false);
 
       await holonRegistration.Setup.InitializeAsync().ConfigureAwait(false);
 
