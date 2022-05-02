@@ -5,27 +5,21 @@ using holonsoft.InnoBootstrapper.Abstractions.Attributes;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Runtime;
 using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup;
+using holonsoft.InnoBootstrapper.Abstractions.Contracts.Setup.Functions;
 using holonsoft.InnoBootstrapper.Abstractions.Enums;
 using holonsoft.InnoBootstrapper.Abstractions.Models.Runtime;
 using holonsoft.InnoBootstrapper.Abstractions.Models.Setup;
+using System.Collections.Concurrent;
 using System.Reflection;
 
 namespace holonsoft.InnoBootstrapper;
 public class HolonBootstrapperBase : IHolonBootstrapper
 {
-  private readonly Dictionary<HolonSetupStage, List<HolonRegistration>> _registrations;
-  private readonly TimeSpan _gracefulTeardownTimeSpan;
-  private const int _defaultGracefulTeardownTimeSpanSeconds = 30;
+  private readonly ConcurrentDictionary<HolonSetupStage, ConcurrentBag<HolonRegistration>> _registrations;
 
-  private CancellationTokenSource? _cancellationTokenSource;
-  private ILifetimeScope? _rootLifetimeScope;
   private HolonSetupStage? _currentStage;
 
-  protected HolonBootstrapperBase(TimeSpan? gracefulTeardownTimeSpan = default)
-  {
-    _registrations = HolonSetupStage.GetValues().ToDictionary(x => x, x => new List<HolonRegistration>());
-    _gracefulTeardownTimeSpan = gracefulTeardownTimeSpan ?? TimeSpan.FromSeconds(_defaultGracefulTeardownTimeSpanSeconds);
-  }
+  protected HolonBootstrapperBase() => _registrations = new(HolonSetupStage.GetValues().Select(x => KeyValuePair.Create(x, new ConcurrentBag<HolonRegistration>())));
 
   IHolonBootstrapper IHolonBootstrapper.AddHolon(HolonSetupStage? setupStage, Type? setupType, Type? runtimeType, Func<IHolonSetup, Task>? externalConfiguration)
   {
@@ -46,8 +40,7 @@ public class HolonBootstrapperBase : IHolonBootstrapper
         ?? DetermineSetupStage(runtimeType)
         ?? HolonSetupStage.ApplicationRun;
 
-    setupStage
-      .Value
+    setupStage.Value
       .Requires(nameof(setupStage))
       .IsGreaterThan(_currentStage?.Value ?? int.MinValue, "New holons can only be added to coming stages!");
 
@@ -56,116 +49,122 @@ public class HolonBootstrapperBase : IHolonBootstrapper
     return this;
   }
 
-  protected virtual Task ConfigureRootLifetimeScopeAsync(ContainerBuilder containerBuilder)
+  async Task<IHolonBootstrapperLifetime> IHolonBootstrapper.StartAsync(CancellationToken stoppingToken)
   {
-    containerBuilder.RegisterSource<AnyConcreteTypeNotAlreadyRegisteredSource>();
+    _currentStage.Requires(nameof(_currentStage)).IsNull($"Bootstrapper was already started!");
+    _currentStage = HolonSetupStage.GetValues().Min();
 
-    containerBuilder
-      .RegisterInstance(this)
-      .As<IHolonBootstrapper>()
-      .SingleInstance();
-
-    return Task.CompletedTask;
-  }
-
-  private async Task RunAsyncInternal(CancellationToken stoppingToken)
-  {
-    async Task RunWithoutSynchronizationAndExecutionFlow()
+    async Task<IHolonBootstrapperLifetime> RunWithoutSynchronizationAndExecutionFlow()
     {
-      _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+      var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
       var containerBuilder = new ContainerBuilder();
-      await ConfigureRootLifetimeScopeAsync(containerBuilder).ConfigureAwait(false);
 
-      _rootLifetimeScope = containerBuilder.Build();
+      containerBuilder.RegisterSource<AnyConcreteTypeNotAlreadyRegisteredSource>();
 
-      var sharedLifetimeScope = _rootLifetimeScope;
-      var stages = _registrations.Keys.OrderBy(x => x).ToArray();
-      foreach (var stage in stages)
+      containerBuilder
+        .RegisterInstance(this)
+        .As<IHolonBootstrapper>()
+        .SingleInstance();
+
+      var rootLifetimeScope = containerBuilder.Build();
+
+      var lifetime = new HolonBootstrapperLifetime(rootLifetimeScope, cancellationTokenSource);
+      try
       {
-        _currentStage = stage;
-        var holonSetupRegistrationsPerStage = _registrations[_currentStage];
-        var setupStageInstance = new HolonSetupStageInstance(holonSetupRegistrationsPerStage, sharedLifetimeScope);
-        sharedLifetimeScope = await setupStageInstance.SetupAndRunAsync(_cancellationTokenSource.Token).ConfigureAwait(false);
+        foreach (var stage in _registrations.OrderBy(x => x.Key))
+        {
+          _currentStage = stage.Key;
+          await SetupAndRunStageAsync(lifetime, stage.Value).ConfigureAwait(false);
+        }
       }
+      catch (Exception) //in case of an error while setting up - try to teardown everything
+      {
+        await lifetime.StopAsync();
+        throw;
+      }
+      return lifetime;
     }
 
     //stop synchronization and Execution flow - e.g. WPF dispatcher or sth.....
-    await Task.Run(RunWithoutSynchronizationAndExecutionFlow).ConfigureAwait(false);
+    return await Task.Run(RunWithoutSynchronizationAndExecutionFlow).ConfigureAwait(false);
   }
 
-  async Task IHolonBootstrapper.RunAsync(CancellationToken stoppingToken)
-    => await RunAsyncInternal(stoppingToken).ConfigureAwait(false);
-
-  private CancellationTokenSource GetCancellationTokenSource()
-    => _cancellationTokenSource ?? throw new InvalidOperationException("Cancellation token source was not created!" +
-                                                                       " Did you run the bootstrapper before trying to stop it?");
-
-  private async Task WaitForShutdownInternalAsync()
+  private async Task SetupAndRunStageAsync(
+    HolonBootstrapperLifetime lifetime, IEnumerable<HolonRegistration> holonRegistrations)
   {
-    try
+    ConcurrentBag<Action<ContainerBuilder>> sharedLifetimeSetupActions = new();
+
+    ConcurrentDictionary<HolonRegistration, IHolonSetup> holonSetups = new();
+    await Parallel.ForEachAsync(holonRegistrations, async (holonRegistration, _) =>
     {
-      var cancellationTokenSource = GetCancellationTokenSource();
+      var setup = (IHolonSetup) lifetime.SharedLifetimeScope.Resolve(holonRegistration.SetupType);
 
-      Task[] GetAllTasks()
-        => _registrations
-            .SelectMany(x => x.Value)
-            .Select(x => x.RuntimeTask ?? Task.CompletedTask)
-            .Where(x => !x.IsCompleted)
-            .ToArray();
+      await holonRegistration.ExternalConfiguration(setup).ConfigureAwait(false);
 
-      Task[] allTasks;
-      while (!cancellationTokenSource.IsCancellationRequested && (allTasks = GetAllTasks()).Length > 0)
+      await setup.InitializeAsync().ConfigureAwait(false);
+
+      if (setup is IHolonSetupSharedLifetimeScope setupSharedLifetimeScope)
       {
-        try
-        {
-          await Task.WhenAll(allTasks).WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
-        }
-        catch (TaskCanceledException)
-        {
-        }
+        sharedLifetimeSetupActions.Add(setupSharedLifetimeScope.SetupSharedLifetime);
       }
 
-      while ((allTasks = GetAllTasks()).Length > 0)
-      {
-        try
-        {
-          await Task.WhenAll(allTasks).WaitAsync(_gracefulTeardownTimeSpan).ConfigureAwait(false);
-        }
-        catch (TaskCanceledException)
-        {
-        }
-      }
-    }
-    finally
+      holonSetups[holonRegistration] = setup;
+    });
+
+    lifetime.SharedLifetimeScope = lifetime.SharedLifetimeScope.BeginLifetimeScope(x =>
     {
-      if (_rootLifetimeScope != null)
+      foreach (var sharedLifetimeSetupAction in sharedLifetimeSetupActions)
       {
-        await _rootLifetimeScope.DisposeAsync().ConfigureAwait(false);
+        sharedLifetimeSetupAction(x);
       }
-    }
-  }
+    });
 
-  async Task IHolonBootstrapper.RunAndWaitAsync(CancellationToken stoppingToken)
-  {
-    await RunAsyncInternal(stoppingToken).ConfigureAwait(false);
-    await WaitForShutdownInternalAsync().ConfigureAwait(false);
-  }
+    ConcurrentDictionary<HolonRegistration, IHolonRuntime> runtimes = new();
+    await Parallel.ForEachAsync(holonRegistrations, async (holonRegistration, _) =>
+    {
+      ILifetimeScope localLifetimeScope;
 
-  async Task IHolonBootstrapper.StopAsync()
-  {
-    GetCancellationTokenSource().Cancel();
-    await WaitForShutdownInternalAsync().ConfigureAwait(false);
+      var setup = holonSetups[holonRegistration];
+
+      if (setup is IHolonSetupLocalLifetimeScope setupLocalLifetimeScope)
+      {
+        localLifetimeScope = lifetime.SharedLifetimeScope.BeginLifetimeScope(setupLocalLifetimeScope.SetupLocalLifetime);
+      }
+      else
+      {
+        localLifetimeScope = lifetime.SharedLifetimeScope.BeginLifetimeScope();
+      }
+
+      if (setup is IHolonSetupCustom setupCustom)
+      {
+        await setupCustom.SetupCustomAsync().ConfigureAwait(false);
+      }
+
+      if (setup is IHolonSetupCompletion setupCompletion)
+      {
+        await setupCompletion.OnSetupCompletedAsync(localLifetimeScope).ConfigureAwait(false);
+      }
+
+      var runtime = (IHolonRuntime) localLifetimeScope.Resolve(holonRegistration.RuntimeType);
+      await runtime.InitializeAsync().ConfigureAwait(false);
+      runtimes[holonRegistration] = runtime;
+    });
+
+    Parallel.ForEach(runtimes, runtime =>
+    {
+      lifetime.Registrations.Add(new HolonLifetimeRegistration(runtime.Key, Task.Run(() => runtime.Value.RunAsync(lifetime.CancellationTokenSource.Token))));
+    });
   }
 }
 
 public sealed class HolonBootstrapper : HolonBootstrapperBase
 {
-  private HolonBootstrapper(TimeSpan? gracefulTeardownTimeSpan = default) : base(gracefulTeardownTimeSpan)
+  private HolonBootstrapper() : base()
   {
 
   }
-  public static IHolonBootstrapper Create(TimeSpan? gracefulTeardownTimeSpan = default)
-    => new HolonBootstrapper(gracefulTeardownTimeSpan);
+  public static IHolonBootstrapper Create()
+    => new HolonBootstrapper();
 
 }

@@ -7,11 +7,7 @@ public interface IHolonBootstrapper
 {
   public IHolonBootstrapper AddHolon(HolonSetupStage? setupStage, Type? setupType, Type? runtimeType, Func<IHolonSetup, Task>? externalConfiguration);
 
-  public Task RunAsync(CancellationToken stoppingToken = default);
-
-  public Task RunAndWaitAsync(CancellationToken stoppingToken = default);
-
-  public Task StopAsync();
+  public Task<IHolonBootstrapperLifetime> StartAsync(CancellationToken stoppingToken = default);
 
   public IHolonBootstrapper AddHolon(HolonSetupStage? setupStage, Type? setupType, Type? runtimeType, Action<IHolonSetup> externalConfiguration)
     => AddHolon(setupStage, setupType, runtimeType, x =>
