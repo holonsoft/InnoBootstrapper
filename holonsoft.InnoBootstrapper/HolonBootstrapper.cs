@@ -23,13 +23,13 @@ public class HolonBootstrapperBase : IHolonBootstrapper
 
   IHolonBootstrapper IHolonBootstrapper.AddHolon(HolonSetupStage? setupStage, Type? setupType, Type? runtimeType, Func<IHolonSetup, Task>? externalConfiguration)
   {
-    setupType = setupType ?? typeof(EmptyHolonSetup);
-    runtimeType = runtimeType ?? typeof(EmptyHolonRuntime);
+    setupType ??= typeof(EmptyHolonSetup);
+    runtimeType ??= typeof(EmptyHolonRuntime);
 
     setupType.Requires(nameof(setupType)).IsOfType<IHolonSetup>().IsNotAbstract();
     runtimeType.Requires(nameof(runtimeType)).IsOfType<IHolonRuntime>().IsNotAbstract();
 
-    externalConfiguration = externalConfiguration ?? (x => Task.CompletedTask);
+    externalConfiguration ??= (x => Task.CompletedTask);
 
     static HolonSetupStage? DetermineSetupStage(Type type)
       => type.GetCustomAttributes<HolonSetupStageAttribute>(true).FirstOrDefault()?.SetupStage;

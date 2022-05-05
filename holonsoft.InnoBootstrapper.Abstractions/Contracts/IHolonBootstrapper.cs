@@ -50,7 +50,7 @@ public interface IHolonBootstrapper
     => AddHolon(setupStage, typeof(THolonSetup), typeof(THolonRuntime), x => externalConfiguration((THolonSetup) x));
 
   public IHolonBootstrapper AddHolonSetup<THolonSetup>() where THolonSetup : IHolonSetup
-   => AddHolon(null, typeof(THolonSetup), null, null);
+    => AddHolon(null, typeof(THolonSetup), null, null);
   public IHolonBootstrapper AddHolonSetup<THolonSetup>(Func<THolonSetup, Task> externalConfiguration) where THolonSetup : IHolonSetup
     => AddHolon(null, typeof(THolonSetup), null, x => externalConfiguration((THolonSetup) x));
   public IHolonBootstrapper AddHolonSetup<THolonSetup>(Action<THolonSetup> externalConfiguration) where THolonSetup : IHolonSetup
@@ -70,9 +70,9 @@ public interface IHolonBootstrapper
   public IHolonBootstrapper AddHolonSetup(HolonSetupStage setupStage, Type setupType)
     => AddHolon(setupStage, setupType, null, null);
   public IHolonBootstrapper AddHolonSetup(HolonSetupStage setupStage, Type setupType, Func<IHolonSetup, Task> externalConfiguration)
-  => AddHolon(setupStage, setupType, null, externalConfiguration);
+    => AddHolon(setupStage, setupType, null, externalConfiguration);
   public IHolonBootstrapper AddHolonSetup(HolonSetupStage setupStage, Type setupType, Action<IHolonSetup> externalConfiguration)
-  => AddHolon(setupStage, setupType, null, externalConfiguration);
+    => AddHolon(setupStage, setupType, null, externalConfiguration);
 
   public IHolonBootstrapper AddHolonRuntime<THolonRuntime>() where THolonRuntime : IHolonRuntime
     => AddHolon(null, null, typeof(THolonRuntime), null);
